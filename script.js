@@ -96,7 +96,7 @@ function filterByIndik(data, columns) {
         throw new Error('No patients with INDIK = 8 found');
     }
     
-    // Keep all rows for patients who have at least one INDIK = 8
+    // Keep all rows for patients who have at least one INDIK = 8 
     const filtered = data.filter(row => pnrsWithIndik8.has(row[pnrCol]));
     
     if (filtered.length === 0) {
