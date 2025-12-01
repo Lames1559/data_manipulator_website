@@ -79,18 +79,37 @@ function filterByIndik(data, columns) {
         throw new Error('INDIK column not found');
     }
     
-    const filtered = data.filter(row => row[indikCol] === 8);
+    const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
+    if (!pnrCol) {
+        throw new Error('PNR column not found (needed for INDIK filtering)');
+    }
+    
+    // Find all PNRs that have at least one INDIK = 8 entry
+    const pnrsWithIndik8 = new Set();
+    data.forEach(row => {
+        if (row[indikCol] === 8) {
+            pnrsWithIndik8.add(row[pnrCol]);
+        }
+    });
+    
+    if (pnrsWithIndik8.size === 0) {
+        throw new Error('No patients with INDIK = 8 found');
+    }
+    
+    // Keep all rows for patients who have at least one INDIK = 8
+    const filtered = data.filter(row => pnrsWithIndik8.has(row[pnrCol]));
+    
     if (filtered.length === 0) {
-        throw new Error('No rows with INDIK = 8 found');
+        throw new Error('No rows found for patients with INDIK = 8');
     }
     
     return { data: filtered, column: indikCol };
 }
 
 function filterByVmax(data, columns) {
-    const vmaxCol = findColumnCaseInsensitive(columns, 'vmax_m_s_');
+    const vmaxCol = findColumnCaseInsensitive(columns, 'Vmax (m/s)');
     if (!vmaxCol) {
-        throw new Error('Vmax_m_s_ column not found');
+        throw new Error('Vmax (m/s) column not found');
     }
     
     const filtered = data.filter(row => {
@@ -99,7 +118,7 @@ function filterByVmax(data, columns) {
     });
     
     if (filtered.length === 0) {
-        throw new Error(`No rows with Vmax_m_s_ > ${VMAX_THRESHOLD}`);
+        throw new Error(`No rows with Vmax (m/s) > ${VMAX_THRESHOLD}`);
     }
     
     return filtered;
@@ -226,11 +245,11 @@ async function processFile() {
         const columns = Object.keys(jsonData[0]);
         
         // Apply filters
-        showProgress('Filtering by INDIK = 8...');
+        showProgress('Filtering by patients with at least one INDIK = 8...');
         const { data: indikFiltered, column: indikCol } = filterByIndik(jsonData, columns);
-        showProgress(`Filtered to ${indikFiltered.length} rows (INDIK = 8)`);
+        showProgress(`Filtered to ${indikFiltered.length} rows (patients with INDIK = 8)`);
         
-        showProgress(`Filtering by Vmax_m_s_ > ${VMAX_THRESHOLD}...`);
+        showProgress(`Filtering by Vmax (m/s) > ${VMAX_THRESHOLD}...`);
         const vmaxFiltered = filterByVmax(indikFiltered, columns);
         showProgress(`Filtered to ${vmaxFiltered.length} rows (Vmax > ${VMAX_THRESHOLD})`);
         
