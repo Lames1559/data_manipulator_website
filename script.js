@@ -122,13 +122,29 @@ function filterByVmax(data, columns) {
         throw new Error('Vmax (m/s) column not found');
     }
     
-    const filtered = data.filter(row => {
+    const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
+    if (!pnrCol) {
+        throw new Error('PNR column not found (needed for Vmax filtering)');
+    }
+    
+    // Find all PNRs that have at least one Vmax >= 4.0
+    const pnrsWithVmax = new Set();
+    data.forEach(row => {
         const val = parseFloat(row[vmaxCol]);
-        return !isNaN(val) && val > VMAX_THRESHOLD;
+        if (!isNaN(val) && val >= VMAX_THRESHOLD) {
+            pnrsWithVmax.add(row[pnrCol]);
+        }
     });
     
+    if (pnrsWithVmax.size === 0) {
+        throw new Error(`No patients with Vmax (m/s) >= ${VMAX_THRESHOLD} found`);
+    }
+    
+    // Keep all rows for patients who have at least one Vmax >= threshold
+    const filtered = data.filter(row => pnrsWithVmax.has(row[pnrCol]));
+    
     if (filtered.length === 0) {
-        throw new Error(`No rows with Vmax (m/s) > ${VMAX_THRESHOLD}`);
+        throw new Error(`No rows found for patients with Vmax (m/s) >= ${VMAX_THRESHOLD}`);
     }
     
     return filtered;
