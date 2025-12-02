@@ -85,18 +85,28 @@ function filterByIndik(data, columns) {
     }
     
     // Find all PNRs that have at least one INDIK = 8 entry
+    // Use loose equality and parseFloat to handle both integers and floats
     const pnrsWithIndik8 = new Set();
     data.forEach(row => {
-        if (row[indikCol] === 8) {
+        const indikValue = row[indikCol];
+        // Check if value is 8 (handles 8, 8.0, "8", "8.0")
+        if (indikValue != null && parseFloat(indikValue) === 8) {
             pnrsWithIndik8.add(row[pnrCol]);
         }
     });
     
     if (pnrsWithIndik8.size === 0) {
-        throw new Error('No patients with INDIK = 8 found');
+        // Debug info to help diagnose the issue
+        const uniqueIndikValues = new Set();
+        data.forEach(row => {
+            const val = row[indikCol];
+            if (val != null) uniqueIndikValues.add(val);
+        });
+        const indikSample = Array.from(uniqueIndikValues).slice(0, 10);
+        throw new Error(`No patients with INDIK = 8 found. Found these INDIK values: ${indikSample.join(', ')}`);
     }
     
-    // Keep all rows for patients who have at least one INDIK = 8 
+    // Keep all rows for patients who have at least one INDIK = 8
     const filtered = data.filter(row => pnrsWithIndik8.has(row[pnrCol]));
     
     if (filtered.length === 0) {
