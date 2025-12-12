@@ -253,34 +253,34 @@ function createID(data, columns) {
 
 function anonymizeDates(data, columns) {
     const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
-    const dateCol = findColumnCaseInsensitive(columns, 'Datum'); // Adjust column name as needed
+    const dateCol = findColumnCaseInsensitive(columns, 'Datum');
     
     if (!pnrCol || !dateCol) {
         throw new Error('PNR or date column not found');
     }
     
-    // Group rows by patient
+    // Group rows by patient with their original indices
     const patientVisits = {};
-    data.forEach(row => {
+    data.forEach((row, idx) => {
         const pnr = row[pnrCol];
         if (!patientVisits[pnr]) {
             patientVisits[pnr] = [];
         }
-        patientVisits[pnr].push(row);
+        patientVisits[pnr].push({ row, idx });
     });
     
-    // For each patient, sort by date and assign incremental visit numbers
+    // For each patient, sort by date and assign visit numbers
     Object.values(patientVisits).forEach(visits => {
-        // Sort by date (ascending)
+        // Sort by date
         visits.sort((a, b) => {
-            const dateA = new Date(a[dateCol]);
-            const dateB = new Date(b[dateCol]);
+            const dateA = new Date(a.row[dateCol]);
+            const dateB = new Date(b.row[dateCol]);
             return dateA - dateB;
         });
         
-        // Assign visit numbers starting from 0
-        visits.forEach((visit, index) => {
-            visit[dateCol] = index;
+        // Assign visit numbers to the actual data
+        visits.forEach((visit, visitNum) => {
+            data[visit.idx][dateCol] = visitNum;
         });
     });
     
@@ -289,10 +289,10 @@ function anonymizeDates(data, columns) {
 
 function calculateAVA(data, columns) {
     const lvotDiamCol = findColumnCaseInsensitive(columns, 'LVOT Diam');
-    const lvotVmaxCol = findColumnCaseInsensitive(columns, 'LVOTI (cm)');
-    const aortaVmaxCol = findColumnCaseInsensitive(columns, 'VTI (cm)_1');
+    const lvotVtiCol = findColumnCaseInsensitive(columns, 'LVOTI (cm)');
+    const aorticVtiCol = findColumnCaseInsensitive(columns, 'VTI (cm)_1');
     
-    if (!lvotDiamCol || !lvotVmaxCol || !aortaVmaxCol) {
+    if (!lvotDiamCol || !lvotVtiCol || !aorticVtiCol) {
         throw new Error('Required columns for AVA calculation not found');
     }
     
@@ -300,25 +300,25 @@ function calculateAVA(data, columns) {
     
     data.forEach(row => {
         const lvotDiamMm = parseFloat(row[lvotDiamCol]);
-        const lvotVmax = parseFloat(row[lvotVmaxCol]);
-        const aortaVmax = parseFloat(row[aortaVmaxCol]);
+        const lvotVti = parseFloat(row[lvotVtiCol]);
+        const aorticVti = parseFloat(row[aorticVtiCol]);
         
         // Check if all values are valid numbers
-        if (!isNaN(lvotDiamMm) && !isNaN(lvotVmax) && !isNaN(aortaVmax) && aortaVmax !== 0) {
+        if (!isNaN(lvotDiamMm) && !isNaN(lvotVti) && !isNaN(aorticVti) && aorticVti !== 0) {
             // Convert LVOT diameter from mm to cm
             const lvotDiamCm = lvotDiamMm / 10;
             
             // Calculate AVA using continuity equation:
-            // AVA = (LVOT area × LVOT Vmax) / Aorta Vmax
+            // AVA = (LVOT area × LVOT VTI) / Aortic Valve VTI
             // LVOT area = π × (diameter/2)²
             const lvotArea = Math.PI * Math.pow(lvotDiamCm / 2, 2);
-            const ava = (lvotArea * lvotVmax) / aortaVmax;
+            const ava = (lvotArea * lvotVti) / aorticVti;
             
             // Round to 2 decimal places
-            row['AVA'] = Math.round(ava * 100) / 100;
+            row['AVA'] = ava
             calculatedCount++;
         } else {
-            row['AVA'] = null; // or '' if you prefer empty string
+            row['AVA'] = null;
         }
     });
     
