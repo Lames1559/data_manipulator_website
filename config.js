@@ -2,7 +2,7 @@
 const FEATURE_MAP = {
     "_config": { "vmax_threshold": 4.0 },
     "DATUM": "rm",
-    "PNR": "rm",
+    "PNR": "keep", // With the condition that PNR is replaced with a randomized number
     "Age": "keep",
     "Sex": "keep",
     "NAMN": "rm",

@@ -222,6 +222,31 @@ function anonymizeNumericValues(data, columns) {
     return modifiedCount;
 }
 
+function createID(data, columns) {
+    const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
+    if (!pnrCol) {
+        throw new Error('PNR column not found');
+    }
+
+    const pnrUniques = new Set();
+    data.forEach(row => {
+        pnrUniques.add(row[pnrCol])
+    });
+
+    const pnrMapping = {};
+    let counter = random(1000000, 9999999); // Start from random point
+    pnrUniques.forEach(pnr => {
+        pnrMapping[pnr] = counter++;
+    });
+
+    const anonData = data.map(row => ({
+        ...row,
+        [pnrCol]: pnrMapping[row[pnrCol]]
+    }))
+
+    return anonData
+}
+
 function removeColumns(data, columnsToDrop) {
     return data.map(row => {
         const newRow = {};
@@ -283,13 +308,17 @@ async function processFile() {
         const { data: frequencyFiltered, patientCount } = filterByPatientFrequency(vmaxFiltered, columns);
         showProgress(`Filtered to ${frequencyFiltered.length} rows (${patientCount} patients with 5+ visits)`);
         
+        
         // Get columns to remove
         showProgress('Removing sensitive columns...');
         const columnsToDrop = getColumnsToRemove(columns, indikCol);
+
+        // Anonymize values
+        showProgress('Changing PNR to randomized values')
+        const updatedData = createID(frequencyFiltered, columns)
         
-        // Anonymize numeric values
         showProgress('Anonymizing numeric values...');
-        const modifiedCount = anonymizeNumericValues(frequencyFiltered, columns);
+        const modifiedCount = anonymizeNumericValues(updatedData, columns);
         showProgress(`Modified ${modifiedCount} values`);
         
         // Remove sensitive columns
