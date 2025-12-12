@@ -222,6 +222,10 @@ function anonymizeNumericValues(data, columns) {
     return modifiedCount;
 }
 
+function random(min,max) {
+ return Math.floor((Math.random())*(max-min+1))+min;
+}
+
 function createID(data, columns) {
     const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
     if (!pnrCol) {
@@ -245,6 +249,80 @@ function createID(data, columns) {
     }))
 
     return anonData
+}
+
+function anonymizeDates(data, columns) {
+    const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
+    const dateCol = findColumnCaseInsensitive(columns, 'Datum'); // Adjust column name as needed
+    
+    if (!pnrCol || !dateCol) {
+        throw new Error('PNR or date column not found');
+    }
+    
+    // Group rows by patient
+    const patientVisits = {};
+    data.forEach(row => {
+        const pnr = row[pnrCol];
+        if (!patientVisits[pnr]) {
+            patientVisits[pnr] = [];
+        }
+        patientVisits[pnr].push(row);
+    });
+    
+    // For each patient, sort by date and assign incremental visit numbers
+    Object.values(patientVisits).forEach(visits => {
+        // Sort by date (ascending)
+        visits.sort((a, b) => {
+            const dateA = new Date(a[dateCol]);
+            const dateB = new Date(b[dateCol]);
+            return dateA - dateB;
+        });
+        
+        // Assign visit numbers starting from 0
+        visits.forEach((visit, index) => {
+            visit[dateCol] = index;
+        });
+    });
+    
+    return data;
+}
+
+function calculateAVA(data, columns) {
+    const lvotDiamCol = findColumnCaseInsensitive(columns, 'LVOT Diam');
+    const lvotVmaxCol = findColumnCaseInsensitive(columns, 'LVOTI (cm)');
+    const aortaVmaxCol = findColumnCaseInsensitive(columns, 'VTI (cm)_1');
+    
+    if (!lvotDiamCol || !lvotVmaxCol || !aortaVmaxCol) {
+        throw new Error('Required columns for AVA calculation not found');
+    }
+    
+    let calculatedCount = 0;
+    
+    data.forEach(row => {
+        const lvotDiamMm = parseFloat(row[lvotDiamCol]);
+        const lvotVmax = parseFloat(row[lvotVmaxCol]);
+        const aortaVmax = parseFloat(row[aortaVmaxCol]);
+        
+        // Check if all values are valid numbers
+        if (!isNaN(lvotDiamMm) && !isNaN(lvotVmax) && !isNaN(aortaVmax) && aortaVmax !== 0) {
+            // Convert LVOT diameter from mm to cm
+            const lvotDiamCm = lvotDiamMm / 10;
+            
+            // Calculate AVA using continuity equation:
+            // AVA = (LVOT area × LVOT Vmax) / Aorta Vmax
+            // LVOT area = π × (diameter/2)²
+            const lvotArea = Math.PI * Math.pow(lvotDiamCm / 2, 2);
+            const ava = (lvotArea * lvotVmax) / aortaVmax;
+            
+            // Round to 2 decimal places
+            row['AVA'] = Math.round(ava * 100) / 100;
+            calculatedCount++;
+        } else {
+            row['AVA'] = null; // or '' if you prefer empty string
+        }
+    });
+    
+    return calculatedCount;
 }
 
 function removeColumns(data, columnsToDrop) {
@@ -316,13 +394,21 @@ async function processFile() {
         // Anonymize values
         showProgress('Changing PNR to randomized values')
         const updatedData = createID(frequencyFiltered, columns)
+
+        // Grabbing the dates and anonymyzing them
+        showProgress('Anonymizing dates to visit numbers...');
+        anonymizeDates(updatedData, columns);
+
+        showProgress('Calculating AVA...');
+        const avaCount = calculateAVA(updatedData, columns);
+        showProgress(`Calculated AVA for ${avaCount} rows`);
         
         showProgress('Anonymizing numeric values...');
         const modifiedCount = anonymizeNumericValues(updatedData, columns);
         showProgress(`Modified ${modifiedCount} values`);
         
         // Remove sensitive columns
-        const finalData = removeColumns(frequencyFiltered, columnsToDrop);
+        const finalData = removeColumns(updatedData, columnsToDrop);
         
         // Generate and download CSV
         showProgress('Generating CSV file...');
