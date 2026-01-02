@@ -287,44 +287,6 @@ function anonymizeDates(data, columns) {
     return data;
 }
 
-function calculateAVA(data, columns) {
-    const lvotDiamCol = findColumnCaseInsensitive(columns, 'LVOT Diam');
-    const lvotVtiCol = findColumnCaseInsensitive(columns, 'LVOTI (cm)');
-    const aorticVtiCol = findColumnCaseInsensitive(columns, 'VTI (cm)_1');
-    
-    if (!lvotDiamCol || !lvotVtiCol || !aorticVtiCol) {
-        throw new Error('Required columns for AVA calculation not found');
-    }
-    
-    let calculatedCount = 0;
-    
-    data.forEach(row => {
-        const lvotDiamMm = parseFloat(row[lvotDiamCol]);
-        const lvotVti = parseFloat(row[lvotVtiCol]);
-        const aorticVti = parseFloat(row[aorticVtiCol]);
-        
-        // Check if all values are valid numbers
-        if (!isNaN(lvotDiamMm) && !isNaN(lvotVti) && !isNaN(aorticVti) && aorticVti !== 0) {
-            // Convert LVOT diameter from mm to cm
-            const lvotDiamCm = lvotDiamMm / 10;
-            
-            // Calculate AVA using continuity equation:
-            // AVA = (LVOT area × LVOT VTI) / Aortic Valve VTI
-            // LVOT area = π × (diameter/2)²
-            const lvotArea = Math.PI * Math.pow(lvotDiamCm / 2, 2);
-            const ava = (lvotArea * lvotVti) / aorticVti;
-            
-            // Round to 2 decimal places
-            row['AVA'] = ava
-            calculatedCount++;
-        } else {
-            row['AVA'] = null;
-        }
-    });
-    
-    return calculatedCount;
-}
-
 function removeColumns(data, columnsToDrop) {
     return data.map(row => {
         const newRow = {};
@@ -398,10 +360,6 @@ async function processFile() {
         // Grabbing the dates and anonymyzing them
         showProgress('Anonymizing dates to visit numbers...');
         anonymizeDates(updatedData, columns);
-
-        showProgress('Calculating AVA...');
-        const avaCount = calculateAVA(updatedData, columns);
-        showProgress(`Calculated AVA for ${avaCount} rows`);
         
         showProgress('Anonymizing numeric values...');
         const modifiedCount = anonymizeNumericValues(updatedData, columns);
