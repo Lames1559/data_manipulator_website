@@ -185,10 +185,10 @@ function getColumnsToRemove(columns, indikCol) {
         }
     }
     
-    // Always drop INDIK
-    if (indikCol && !columnsToDrop.includes(indikCol)) {
-        columnsToDrop.push(indikCol);
-    }
+    // // Always drop INDIK
+    // if (indikCol && !columnsToDrop.includes(indikCol)) {
+    //     columnsToDrop.push(indikCol);
+    // }
     
     return columnsToDrop;
 }
