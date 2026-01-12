@@ -259,6 +259,27 @@ function anonymizeDates(data, columns) {
         throw new Error('PNR or date column not found');
     }
     
+    // Helper to parse date and normalize to midnight
+    function parseDate(dateValue) {
+        let date;
+        
+        if (dateValue instanceof Date) {
+            date = dateValue;
+        } else if (typeof dateValue === 'string') {
+            date = new Date(dateValue);
+        } else if (typeof dateValue === 'number') {
+            // Excel serial date
+            const excelEpoch = new Date(1899, 11, 30);
+            date = new Date(excelEpoch.getTime() + dateValue * 86400000);
+        } else {
+            throw new Error(`Unexpected date format: ${dateValue}`);
+        }
+        
+        // Normalize to midnight to avoid time component issues
+        date.setHours(0, 0, 0, 0);
+        return date;
+    }
+    
     // Group rows by patient with their original indices
     const patientVisits = {};
     data.forEach((row, idx) => {
@@ -269,18 +290,23 @@ function anonymizeDates(data, columns) {
         patientVisits[pnr].push({ row, idx });
     });
     
-    // For each patient, sort by date and assign visit numbers
+    // For each patient, calculate days from first visit
     Object.values(patientVisits).forEach(visits => {
         // Sort by date
         visits.sort((a, b) => {
-            const dateA = new Date(a.row[dateCol]);
-            const dateB = new Date(b.row[dateCol]);
+            const dateA = parseDate(a.row[dateCol]);
+            const dateB = parseDate(b.row[dateCol]);
             return dateA - dateB;
         });
         
-        // Assign visit numbers to the actual data
-        visits.forEach((visit, visitNum) => {
-            data[visit.idx][dateCol] = visitNum;
+        // Get first date as baseline
+        const firstDate = parseDate(visits[0].row[dateCol]);
+        
+        // Calculate days from first date for each visit
+        visits.forEach((visit) => {
+            const currentDate = parseDate(visit.row[dateCol]);
+            const daysDiff = Math.floor((currentDate - firstDate) / (1000 * 60 * 60 * 24));
+            data[visit.idx][dateCol] = daysDiff;
         });
     });
     
