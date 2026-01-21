@@ -64,8 +64,8 @@ function hideProgress() {
 
 // Utility Functions
 function findColumnCaseInsensitive(columns, targetCol) {
-    const targetLower = targetCol.toLowerCase();
-    return columns.find(col => col.toLowerCase() === targetLower);
+    const targetLower = targetCol.toLowerCase().trim();
+    return columns.find(col => col.toLowerCase().trim() === targetLower);
 }
 
 function isNumeric(value) {
@@ -113,8 +113,30 @@ function filterByIndik(data, columns) {
 }
 
 function filterByVmax(data, columns) {
-    const vmaxCol = findColumnCaseInsensitive(columns, 'Vmax (m/s)');
+    // Try multiple exact variations of the Vmax column name
+    const vmaxVariations = [
+        'Vmax (m/s)',
+        'Vmax(m/s)',
+        'Vmax (m/s)',  // non-breaking space
+        'Vmax',
+        'vmax (m/s)',
+        'vmax',
+        'V max (m/s)',
+        'V max',
+        'Vmax(m / s)',
+        'Vmax (m / s)',
+        'Vmax  (m/s)',  // double space
+        'Vmax ( m/s )',  // spaces around units
+    ];
+    
+    let vmaxCol = null;
+    for (const variant of vmaxVariations) {
+        vmaxCol = findColumnCaseInsensitive(columns, variant);
+        if (vmaxCol) break;
+    }
+    
     if (!vmaxCol) {
+        // Show what columns ARE available to help debug
         throw new Error('Vmax (m/s) column not found');
     }
     
@@ -132,13 +154,15 @@ function filterByVmax(data, columns) {
     });
     
     if (pnrsWithVmax.size === 0) {
-        throw new Error(`No patients with Vmax (m/s) >= ${VMAX_THRESHOLD} found`);
+        // Debug: show what values we actually found
+        const vmaxSample = data.slice(0, 10).map(row => row[vmaxCol]);
+        throw new Error(`No patients with Vmax >= ${VMAX_THRESHOLD} found. Sample values: ${vmaxSample.join(', ')}`);
     }
     
     const filtered = data.filter(row => pnrsWithVmax.has(row[pnrCol]));
     
     if (filtered.length === 0) {
-        throw new Error(`No rows found for patients with Vmax (m/s) >= ${VMAX_THRESHOLD}`);
+        throw new Error(`No rows found for patients with Vmax >= ${VMAX_THRESHOLD}`);
     }
     
     return filtered;
