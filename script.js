@@ -261,22 +261,115 @@ function anonymizeDates(data, columns) {
     
     // Helper to parse date and normalize to midnight
     function parseDate(dateValue) {
-        let date;
+        console.log('Date value:', dateValue, 'Type:', typeof dateValue);
         
-        if (dateValue instanceof Date) {
-            date = dateValue;
-        } else if (typeof dateValue === 'string') {
-            date = new Date(dateValue);
-        } else if (typeof dateValue === 'number') {
-            // Excel serial date
-            const excelEpoch = new Date(1899, 11, 30);
-            date = new Date(excelEpoch.getTime() + dateValue * 86400000);
-        } else {
-            throw new Error(`Unexpected date format: ${dateValue}`);
+        // Handle null/undefined/empty
+        if (dateValue == null || dateValue === '') {
+            throw new Error(`Empty date value encountered`);
         }
         
-        // Normalize to midnight to avoid time component issues
+        let excelSerial;
+        
+        // Case 1: Already a number (Excel serial)
+        if (typeof dateValue === 'number') {
+            excelSerial = dateValue;
+        }
+        // Case 2: Already a Date object
+        else if (dateValue instanceof Date) {
+            const excelEpoch = new Date(1899, 11, 30);
+            excelSerial = (dateValue - excelEpoch) / 86400000;
+        }
+        // Case 3: String - THE GAUNTLET
+        else if (typeof dateValue === 'string') {
+            const trimmed = dateValue.trim();
+            
+            // Check for compact YYYYMMDD (8 digits)
+            if (/^\d{8}$/.test(trimmed)) {
+                const year = parseInt(trimmed.substring(0, 4));
+                const month = parseInt(trimmed.substring(4, 6)) - 1;
+                const day = parseInt(trimmed.substring(6, 8));
+                const date = new Date(year, month, day);
+                const excelEpoch = new Date(1899, 11, 30);
+                excelSerial = (date - excelEpoch) / 86400000;
+            }
+            // Check for compact YYMMDD (6 digits)
+        else if (/^\d{6}$/.test(trimmed)) {
+            // FUCK IT - assume YYMMDD because Sweden follows ISO
+            const yy = parseInt(trimmed.substring(0, 2));
+            const mm = parseInt(trimmed.substring(2, 4)) - 1;
+            const dd = parseInt(trimmed.substring(4, 6));
+            const year = yy < 50 ? 2000 + yy : 1900 + yy;
+            const date = new Date(year, mm, dd);
+            const excelEpoch = new Date(1899, 11, 30);
+            excelSerial = (date - excelEpoch) / 86400000;
+        }
+            // Check if it's a pure number string (Excel serial as text)
+            else {
+                const asNumber = parseFloat(trimmed);
+                if (!isNaN(asNumber) && trimmed === asNumber.toString() && asNumber > 1000 && asNumber < 100000) {
+                    // Looks like Excel serial
+                    excelSerial = asNumber;
+                }
+                // Try parsing as date string
+                else {
+                    let parsed = new Date(trimmed);
+                    
+                    // If that failed, try format variations
+                    if (isNaN(parsed.getTime())) {
+                        const formats = [
+                            trimmed.replace(/\//g, '-'),
+                            trimmed.replace(/-/g, '/'),
+                            trimmed.replace(/\./g, '/'),
+                        ];
+                        
+                        for (const fmt of formats) {
+                            parsed = new Date(fmt);
+                            if (!isNaN(parsed.getTime())) break;
+                        }
+                    }
+                    
+                    // Manual parsing for ambiguous formats
+                    if (isNaN(parsed.getTime())) {
+                        const match = trimmed.match(/(\d{1,4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,4})/);
+                        if (match) {
+                            let [_, a, b, c] = match;
+                            a = parseInt(a);
+                            b = parseInt(b);
+                            c = parseInt(c);
+                            
+                            if (a > 31) {
+                                // YYYY-MM-DD
+                                parsed = new Date(a, b - 1, c);
+                            } else if (c > 31) {
+                                // MM/DD/YYYY
+                                parsed = new Date(c, a - 1, b);
+                            }
+                        }
+                    }
+                    
+                    if (isNaN(parsed.getTime())) {
+                        throw new Error(`Failed to parse date string: ${dateValue}`);
+                    }
+                    
+                    const excelEpoch = new Date(1899, 11, 30);
+                    excelSerial = (parsed - excelEpoch) / 86400000;
+                }
+            }
+        }
+        else {
+            throw new Error(`Unexpected date format: ${dateValue} (type: ${typeof dateValue})`);
+        }
+        
+        // Convert Excel serial to Date for return
+        const excelEpoch = new Date(1899, 11, 30);
+        const date = new Date(excelEpoch.getTime() + excelSerial * 86400000);
+        
+        if (isNaN(date.getTime())) {
+            throw new Error(`Failed to convert to date: ${dateValue} (serial: ${excelSerial})`);
+        }
+        
         date.setHours(0, 0, 0, 0);
+        console.log('Parsed to:', date.toISOString().split('T')[0], '(serial:', excelSerial, ')');
         return date;
     }
     
