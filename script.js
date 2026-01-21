@@ -85,18 +85,15 @@ function filterByIndik(data, columns) {
     }
     
     // Find all PNRs that have at least one INDIK = 8 entry
-    // Use loose equality and parseFloat to handle both integers and floats
     const pnrsWithIndik8 = new Set();
     data.forEach(row => {
         const indikValue = row[indikCol];
-        // Check if value is 8 (handles 8, 8.0, "8", "8.0")
         if (indikValue != null && parseFloat(indikValue) === 8) {
             pnrsWithIndik8.add(row[pnrCol]);
         }
     });
     
     if (pnrsWithIndik8.size === 0) {
-        // Debug info to help diagnose the issue
         const uniqueIndikValues = new Set();
         data.forEach(row => {
             const val = row[indikCol];
@@ -106,7 +103,6 @@ function filterByIndik(data, columns) {
         throw new Error(`No patients with INDIK = 8 found. Found these INDIK values: ${indikSample.join(', ')}`);
     }
     
-    // Keep all rows for patients who have at least one INDIK = 8
     const filtered = data.filter(row => pnrsWithIndik8.has(row[pnrCol]));
     
     if (filtered.length === 0) {
@@ -127,7 +123,6 @@ function filterByVmax(data, columns) {
         throw new Error('PNR column not found (needed for Vmax filtering)');
     }
     
-    // Find all PNRs that have at least one Vmax >= 4.0
     const pnrsWithVmax = new Set();
     data.forEach(row => {
         const val = parseFloat(row[vmaxCol]);
@@ -140,7 +135,6 @@ function filterByVmax(data, columns) {
         throw new Error(`No patients with Vmax (m/s) >= ${VMAX_THRESHOLD} found`);
     }
     
-    // Keep all rows for patients who have at least one Vmax >= threshold
     const filtered = data.filter(row => pnrsWithVmax.has(row[pnrCol]));
     
     if (filtered.length === 0) {
@@ -156,14 +150,12 @@ function filterByPatientFrequency(data, columns) {
         throw new Error('PNR column not found');
     }
     
-    // Count occurrences
     const pnrCounts = {};
     data.forEach(row => {
         const pnr = row[pnrCol];
         pnrCounts[pnr] = (pnrCounts[pnr] || 0) + 1;
     });
     
-    // Keep only patients with >=5 visits
     const validPnrs = Object.keys(pnrCounts).filter(pnr => pnrCounts[pnr] >= 5);
     const filtered = data.filter(row => validPnrs.includes(String(row[pnrCol])));
     
@@ -177,18 +169,12 @@ function filterByPatientFrequency(data, columns) {
 function getColumnsToRemove(columns, indikCol) {
     const columnsToDrop = [];
     
-    // Add columns marked "rm" in feature map
     for (const [mapCol, action] of Object.entries(FEATURE_MAP)) {
         if (action === 'rm') {
             const actualCol = findColumnCaseInsensitive(columns, mapCol);
             if (actualCol) columnsToDrop.push(actualCol);
         }
     }
-    
-    // // Always drop INDIK
-    // if (indikCol && !columnsToDrop.includes(indikCol)) {
-    //     columnsToDrop.push(indikCol);
-    // }
     
     return columnsToDrop;
 }
@@ -207,7 +193,6 @@ function anonymizeNumericValues(data, columns) {
                     const modification = (Math.random() * 2 - 1) * action;
                     const newValue = parseFloat(value) + modification;
                     
-                    // Round based on action value
                     if (action >= 1.0) {
                         row[actualCol] = Math.round(newValue);
                     } else {
@@ -222,8 +207,8 @@ function anonymizeNumericValues(data, columns) {
     return modifiedCount;
 }
 
-function random(min,max) {
- return Math.floor((Math.random())*(max-min+1))+min;
+function random(min, max) {
+    return Math.floor((Math.random()) * (max - min + 1)) + min;
 }
 
 function createID(data, columns) {
@@ -234,11 +219,11 @@ function createID(data, columns) {
 
     const pnrUniques = new Set();
     data.forEach(row => {
-        pnrUniques.add(row[pnrCol])
+        pnrUniques.add(row[pnrCol]);
     });
 
     const pnrMapping = {};
-    let counter = random(1000000, 9999999); // Start from random point
+    let counter = random(1000000, 9999999);
     pnrUniques.forEach(pnr => {
         pnrMapping[pnr] = counter++;
     });
@@ -246,9 +231,9 @@ function createID(data, columns) {
     const anonData = data.map(row => ({
         ...row,
         [pnrCol]: pnrMapping[row[pnrCol]]
-    }))
+    }));
 
-    return anonData
+    return anonData;
 }
 
 function anonymizeDates(data, columns) {
@@ -259,32 +244,35 @@ function anonymizeDates(data, columns) {
         throw new Error('PNR or date column not found');
     }
     
-    // Helper to parse date and normalize to midnight
     function parseDate(dateValue) {
-        console.log('Date value:', dateValue, 'Type:', typeof dateValue);
-        
-        // Handle null/undefined/empty
         if (dateValue == null || dateValue === '') {
-            throw new Error(`Empty date value encountered`);
+            throw new Error('Empty date value encountered');
         }
         
         let excelSerial;
         
-        // Case 1: Already a number (Excel serial)
         if (typeof dateValue === 'number') {
             excelSerial = dateValue;
         }
-        // Case 2: Already a Date object
         else if (dateValue instanceof Date) {
             const excelEpoch = new Date(1899, 11, 30);
             excelSerial = (dateValue - excelEpoch) / 86400000;
         }
-        // Case 3: String - THE GAUNTLET
         else if (typeof dateValue === 'string') {
             const trimmed = dateValue.trim();
-            
-            // Check for compact YYYYMMDD (8 digits)
-            if (/^\d{8}$/.test(trimmed)) {
+
+            // Swedish format: CC-YYMMDD (e.g., "20-011028" = 2001-10-28)
+            if (/^\d{2}-\d{6}$/.test(trimmed)) {
+                const century = parseInt(trimmed.substring(0, 2));
+                const yy = parseInt(trimmed.substring(3, 5));
+                const mm = parseInt(trimmed.substring(5, 7)) - 1;
+                const dd = parseInt(trimmed.substring(7, 9));
+                const year = century * 100 + yy;
+                const date = new Date(year, mm, dd);
+                const excelEpoch = new Date(1899, 11, 30);
+                excelSerial = (date - excelEpoch) / 86400000;
+            }
+            else if (/^\d{8}$/.test(trimmed)) {
                 const year = parseInt(trimmed.substring(0, 4));
                 const month = parseInt(trimmed.substring(4, 6)) - 1;
                 const day = parseInt(trimmed.substring(6, 8));
@@ -292,60 +280,22 @@ function anonymizeDates(data, columns) {
                 const excelEpoch = new Date(1899, 11, 30);
                 excelSerial = (date - excelEpoch) / 86400000;
             }
-            // Check for compact YYMMDD (6 digits)
-        else if (/^\d{6}$/.test(trimmed)) {
-            // FUCK IT - assume YYMMDD because Sweden follows ISO
-            const yy = parseInt(trimmed.substring(0, 2));
-            const mm = parseInt(trimmed.substring(2, 4)) - 1;
-            const dd = parseInt(trimmed.substring(4, 6));
-            const year = yy < 50 ? 2000 + yy : 1900 + yy;
-            const date = new Date(year, mm, dd);
-            const excelEpoch = new Date(1899, 11, 30);
-            excelSerial = (date - excelEpoch) / 86400000;
-        }
-            // Check if it's a pure number string (Excel serial as text)
+            else if (/^\d{6}$/.test(trimmed)) {
+                const yy = parseInt(trimmed.substring(0, 2));
+                const mm = parseInt(trimmed.substring(2, 4)) - 1;
+                const dd = parseInt(trimmed.substring(4, 6));
+                const year = yy < 50 ? 2000 + yy : 1900 + yy;
+                const date = new Date(year, mm, dd);
+                const excelEpoch = new Date(1899, 11, 30);
+                excelSerial = (date - excelEpoch) / 86400000;
+            }
             else {
                 const asNumber = parseFloat(trimmed);
-                if (!isNaN(asNumber) && trimmed === asNumber.toString() && asNumber > 1000 && asNumber < 100000) {
-                    // Looks like Excel serial
+                if (!isNaN(asNumber) && asNumber > 1000 && asNumber < 100000) {
                     excelSerial = asNumber;
                 }
-                // Try parsing as date string
                 else {
                     let parsed = new Date(trimmed);
-                    
-                    // If that failed, try format variations
-                    if (isNaN(parsed.getTime())) {
-                        const formats = [
-                            trimmed.replace(/\//g, '-'),
-                            trimmed.replace(/-/g, '/'),
-                            trimmed.replace(/\./g, '/'),
-                        ];
-                        
-                        for (const fmt of formats) {
-                            parsed = new Date(fmt);
-                            if (!isNaN(parsed.getTime())) break;
-                        }
-                    }
-                    
-                    // Manual parsing for ambiguous formats
-                    if (isNaN(parsed.getTime())) {
-                        const match = trimmed.match(/(\d{1,4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,4})/);
-                        if (match) {
-                            let [_, a, b, c] = match;
-                            a = parseInt(a);
-                            b = parseInt(b);
-                            c = parseInt(c);
-                            
-                            if (a > 31) {
-                                // YYYY-MM-DD
-                                parsed = new Date(a, b - 1, c);
-                            } else if (c > 31) {
-                                // MM/DD/YYYY
-                                parsed = new Date(c, a - 1, b);
-                            }
-                        }
-                    }
                     
                     if (isNaN(parsed.getTime())) {
                         throw new Error(`Failed to parse date string: ${dateValue}`);
@@ -360,7 +310,6 @@ function anonymizeDates(data, columns) {
             throw new Error(`Unexpected date format: ${dateValue} (type: ${typeof dateValue})`);
         }
         
-        // Convert Excel serial to Date for return
         const excelEpoch = new Date(1899, 11, 30);
         const date = new Date(excelEpoch.getTime() + excelSerial * 86400000);
         
@@ -369,11 +318,9 @@ function anonymizeDates(data, columns) {
         }
         
         date.setHours(0, 0, 0, 0);
-        console.log('Parsed to:', date.toISOString().split('T')[0], '(serial:', excelSerial, ')');
         return date;
     }
     
-    // Group rows by patient with their original indices
     const patientVisits = {};
     data.forEach((row, idx) => {
         const pnr = row[pnrCol];
@@ -383,19 +330,15 @@ function anonymizeDates(data, columns) {
         patientVisits[pnr].push({ row, idx });
     });
     
-    // For each patient, calculate days from first visit
     Object.values(patientVisits).forEach(visits => {
-        // Sort by date
         visits.sort((a, b) => {
             const dateA = parseDate(a.row[dateCol]);
             const dateB = parseDate(b.row[dateCol]);
             return dateA - dateB;
         });
         
-        // Get first date as baseline
         const firstDate = parseDate(visits[0].row[dateCol]);
         
-        // Calculate days from first date for each visit
         visits.forEach((visit) => {
             const currentDate = parseDate(visit.row[dateCol]);
             const daysDiff = Math.floor((currentDate - firstDate) / (1000 * 60 * 60 * 24));
@@ -428,7 +371,6 @@ function downloadCSV(data, originalFileName) {
     link.click();
 }
 
-// Main Processing Function
 async function processFile() {
     const file = fileInput.files[0];
     if (!file) return;
@@ -439,7 +381,6 @@ async function processFile() {
     try {
         showProgress('Reading file...');
         
-        // Read Excel file
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -451,10 +392,8 @@ async function processFile() {
 
         showProgress(`File read: ${jsonData.length} rows`);
         
-        // Get column names
         const columns = Object.keys(jsonData[0]);
         
-        // Apply filters
         showProgress('Filtering by patients with at least one INDIK = 8...');
         const { data: indikFiltered, column: indikCol } = filterByIndik(jsonData, columns);
         showProgress(`Filtered to ${indikFiltered.length} rows (patients with INDIK = 8)`);
@@ -467,16 +406,12 @@ async function processFile() {
         const { data: frequencyFiltered, patientCount } = filterByPatientFrequency(vmaxFiltered, columns);
         showProgress(`Filtered to ${frequencyFiltered.length} rows (${patientCount} patients with 5+ visits)`);
         
-        
-        // Get columns to remove
         showProgress('Removing sensitive columns...');
         const columnsToDrop = getColumnsToRemove(columns, indikCol);
 
-        // Anonymize values
-        showProgress('Changing PNR to randomized values')
-        const updatedData = createID(frequencyFiltered, columns)
+        showProgress('Changing PNR to randomized values');
+        const updatedData = createID(frequencyFiltered, columns);
 
-        // Grabbing the dates and anonymyzing them
         showProgress('Anonymizing dates to visit numbers...');
         anonymizeDates(updatedData, columns);
         
@@ -484,10 +419,8 @@ async function processFile() {
         const modifiedCount = anonymizeNumericValues(updatedData, columns);
         showProgress(`Modified ${modifiedCount} values`);
         
-        // Remove sensitive columns
         const finalData = removeColumns(updatedData, columnsToDrop);
         
-        // Generate and download CSV
         showProgress('Generating CSV file...');
         downloadCSV(finalData, file.name);
         
