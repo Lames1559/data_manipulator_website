@@ -2,7 +2,6 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks,visualstudiocode,macos,windows,microsoftoffice
 
 # Specific for this project
-*.xlsx
 data/
 *_test.ipynb
 *.exe
