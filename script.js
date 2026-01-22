@@ -126,7 +126,7 @@ function filterByVmax(data, columns) {
         'Vmax(m / s)',
         'Vmax (m / s)',
         'Vmax  (m/s)',  // double space
-        'Vmax ( m/s )',  // spaces around units
+        'Vmax ( m/s )',  // spaces around the units
     ];
     
     let vmaxCol = null;
