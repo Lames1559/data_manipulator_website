@@ -269,7 +269,6 @@ function anonymizeDates(data, columns) {
     }
     
     function parseDate(dateValue) {
-        console.log('Raw date:', dateValue, 'Char codes:', Array.from(String(dateValue)).map(c => c.charCodeAt(0)));
         if (dateValue == null || dateValue === '') {
             throw new Error('Empty date value encountered');
         }
@@ -284,51 +283,53 @@ function anonymizeDates(data, columns) {
             excelSerial = (dateValue - excelEpoch) / 86400000;
         }
         else if (typeof dateValue === 'string') {
-            const trimmed = dateValue.trim();
+            // Strip EVERYTHING that isn't a digit and reconstruct
+            let cleaned = dateValue.replace(/[^\d]/g, '');
+            
+            // Now we have only digits - figure out the format
+            if (cleaned.length === 8) {
+                // YYYYMMDD
+                const year = parseInt(cleaned.substring(0, 4));
+                const month = parseInt(cleaned.substring(4, 6)) - 1;
+                const day = parseInt(cleaned.substring(6, 8));
+                const date = new Date(year, month, day);
+                const excelEpoch = new Date(1899, 11, 30);
+                excelSerial = (date - excelEpoch) / 86400000;
+            }
+            else if (cleaned.length === 9) {
 
-            // Swedish format: CC-YYMMDD (e.g., "20-011028" = 2001-10-28)
-            if (/^\d{2}-\d{6}$/.test(trimmed)) {
-                const century = parseInt(trimmed.substring(0, 2));
-                const yy = parseInt(trimmed.substring(3, 5));
-                const mm = parseInt(trimmed.substring(5, 7)) - 1;
-                const dd = parseInt(trimmed.substring(7, 9));
+                // Let's assume it's Swedish personal number format
+                // First 2 digits = century marker
+                const century = parseInt(cleaned.substring(0, 2));
+                const yy = parseInt(cleaned.substring(2, 4));
+                const mm = parseInt(cleaned.substring(4, 6)) - 1;
+                const dd = parseInt(cleaned.substring(6, 8));
                 const year = century * 100 + yy;
                 const date = new Date(year, mm, dd);
                 const excelEpoch = new Date(1899, 11, 30);
                 excelSerial = (date - excelEpoch) / 86400000;
             }
-            else if (/^\d{8}$/.test(trimmed)) {
-                const year = parseInt(trimmed.substring(0, 4));
-                const month = parseInt(trimmed.substring(4, 6)) - 1;
-                const day = parseInt(trimmed.substring(6, 8));
-                const date = new Date(year, month, day);
-                const excelEpoch = new Date(1899, 11, 30);
-                excelSerial = (date - excelEpoch) / 86400000;
-            }
-            else if (/^\d{6}$/.test(trimmed)) {
-                const yy = parseInt(trimmed.substring(0, 2));
-                const mm = parseInt(trimmed.substring(2, 4)) - 1;
-                const dd = parseInt(trimmed.substring(4, 6));
+            else if (cleaned.length === 6) {
+                // YYMMDD
+                const yy = parseInt(cleaned.substring(0, 2));
+                const mm = parseInt(cleaned.substring(2, 4)) - 1;
+                const dd = parseInt(cleaned.substring(4, 6));
                 const year = yy < 50 ? 2000 + yy : 1900 + yy;
                 const date = new Date(year, mm, dd);
                 const excelEpoch = new Date(1899, 11, 30);
                 excelSerial = (date - excelEpoch) / 86400000;
             }
-            else {
-                const asNumber = parseFloat(trimmed);
+            else if (cleaned.length >= 5 && cleaned.length <= 7) {
+                // Could be Excel serial as string
+                const asNumber = parseFloat(cleaned);
                 if (!isNaN(asNumber) && asNumber > 1000 && asNumber < 100000) {
                     excelSerial = asNumber;
+                } else {
+                    throw new Error(`Ambiguous date format after cleaning: ${dateValue} -> ${cleaned}`);
                 }
-                else {
-                    let parsed = new Date(trimmed);
-                    
-                    if (isNaN(parsed.getTime())) {
-                        throw new Error(`Failed to parse date string: ${dateValue}`);
-                    }
-                    
-                    const excelEpoch = new Date(1899, 11, 30);
-                    excelSerial = (parsed - excelEpoch) / 86400000;
-                }
+            }
+            else {
+                throw new Error(`Cannot parse date: ${dateValue} (cleaned to: ${cleaned}, length: ${cleaned.length})`);
             }
         }
         else {
@@ -359,6 +360,7 @@ function anonymizeDates(data, columns) {
         visits.sort((a, b) => {
             const dateA = parseDate(a.row[dateCol]);
             const dateB = parseDate(b.row[dateCol]);
+            console.log(`Comparing ${a.row[dateCol]} (${dateA}) vs ${b.row[dateCol]} (${dateB})`);
             return dateA - dateB;
         });
         
