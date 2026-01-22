@@ -269,6 +269,7 @@ function anonymizeDates(data, columns) {
     }
     
     function parseDate(dateValue) {
+        console.log('Raw date:', dateValue, 'Char codes:', Array.from(String(dateValue)).map(c => c.charCodeAt(0)));
         if (dateValue == null || dateValue === '') {
             throw new Error('Empty date value encountered');
         }
