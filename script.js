@@ -421,20 +421,20 @@ async function processFile() {
         
         const columns = Object.keys(jsonData[0]);
         
-        showProgress('Filtering by patients with at least one INDIK = 8...');
-        const { data: indikFiltered, column: indikCol } = filterByIndik(jsonData, columns);
-        showProgress(`Filtered to ${indikFiltered.length} rows (patients with INDIK = 8)`);
+        // showProgress('Filtering by patients with at least one INDIK = 8...');
+        // const { data: indikFiltered } = filterByIndik(jsonData, columns);
+        // showProgress(`Filtered to ${indikFiltered.length} rows (patients with INDIK = 8)`);
         
-        showProgress(`Filtering by Vmax (m/s) > ${VMAX_THRESHOLD}...`);
-        const vmaxFiltered = filterByVmax(indikFiltered, columns);
-        showProgress(`Filtered to ${vmaxFiltered.length} rows (Vmax > ${VMAX_THRESHOLD})`);
+        // showProgress(`Filtering by Vmax (m/s) > ${VMAX_THRESHOLD}...`);
+        // const vmaxFiltered = filterByVmax(jsonData, columns);
+        // showProgress(`Filtered to ${vmaxFiltered.length} rows (Vmax > ${VMAX_THRESHOLD})`);
         
         showProgress('Filtering by patient frequency (min 5 visits)...');
-        const { data: frequencyFiltered, patientCount } = filterByPatientFrequency(vmaxFiltered, columns);
+        const { data: frequencyFiltered, patientCount } = filterByPatientFrequency(jsonData, columns);
         showProgress(`Filtered to ${frequencyFiltered.length} rows (${patientCount} patients with 5+ visits)`);
         
         showProgress('Removing sensitive columns...');
-        const columnsToDrop = getColumnsToRemove(columns, indikCol);
+        const columnsToDrop = getColumnsToRemove(columns);
 
         showProgress('Changing PNR to randomized values');
         const updatedData = createID(frequencyFiltered, columns);
