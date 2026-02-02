@@ -425,12 +425,12 @@ async function processFile() {
         // const { data: indikFiltered } = filterByIndik(jsonData, columns);
         // showProgress(`Filtered to ${indikFiltered.length} rows (patients with INDIK = 8)`);
         
-        // showProgress(`Filtering by Vmax (m/s) > ${VMAX_THRESHOLD}...`);
-        // const vmaxFiltered = filterByVmax(jsonData, columns);
-        // showProgress(`Filtered to ${vmaxFiltered.length} rows (Vmax > ${VMAX_THRESHOLD})`);
+        showProgress(`Filtering by Vmax (m/s) > ${VMAX_THRESHOLD}...`);
+        const vmaxFiltered = filterByVmax(jsonData, columns);
+        showProgress(`Filtered to ${vmaxFiltered.length} rows (Vmax > ${VMAX_THRESHOLD})`);
         
         showProgress('Filtering by patient frequency (min 5 visits)...');
-        const { data: frequencyFiltered, patientCount } = filterByPatientFrequency(jsonData, columns);
+        const { data: frequencyFiltered, patientCount } = filterByPatientFrequency(vmaxFiltered, columns);
         showProgress(`Filtered to ${frequencyFiltered.length} rows (${patientCount} patients with 5+ visits)`);
         
         showProgress('Removing sensitive columns...');

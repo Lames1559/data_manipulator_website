@@ -1,6 +1,6 @@
 // Feature mapping configuration
 const FEATURE_MAP = {
-    "_config": { "vmax_threshold": 4.0 },
+    "_config": { "vmax_threshold": 2.0 },
     "DATUM": "keep", // With the condition that this is replaced with a different way to keep track of time than dates
     "PNR": "keep", // With the condition that PNR is replaced with a randomized number
     "Age": "keep",
