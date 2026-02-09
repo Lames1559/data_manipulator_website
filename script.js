@@ -389,8 +389,13 @@ function removeColumns(data, columnsToDrop) {
 }
 
 function downloadCSV(data, originalFileName) {
-    const csv = Papa.unparse(data);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const csv = Papa.unparse(data, {
+        quotes: true,
+        encoding: "utf8"
+    });
+    // Add UTF-8 BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const fileName = originalFileName.replace(/\.[^/.]+$/, '');
     link.href = URL.createObjectURL(blob);
@@ -409,9 +414,17 @@ async function processFile() {
         showProgress('Reading file...');
         
         const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data, { type: 'array' });
+        // FIX: Explicitly handle encoding
+        const workbook = XLSX.read(data, { 
+            type: 'array',
+            cellDates: true,
+            codepage: 65001  // UTF-8
+        });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        let jsonData = XLSX.utils.sheet_to_json(firstSheet);
+        let jsonData = XLSX.utils.sheet_to_json(firstSheet, {
+            raw: false,
+            defval: null
+        });
 
         if (jsonData.length === 0) {
             throw new Error('File is empty');
@@ -419,11 +432,43 @@ async function processFile() {
 
         showProgress(`File read: ${jsonData.length} rows`);
         
+        // Normalize column names (trim whitespace, normalize encoding)
+        const normalizeColumnName = (name) => {
+            if (!name) return '';
+            
+            return name
+                .trim()
+                // Remove ALL invisible/zero-width characters
+                .replace(/[\u200B-\u200D\uFEFF]/g, '')  // zero-width space, joiners, BOM
+                .replace(/[\u00A0]/g, ' ')  // non-breaking space to regular space
+                .replace(/\s+/g, ' ')  // collapse multiple spaces
+                .trim();  // trim again after normalization
+        };
+        
+        // Normalize all column names in the data
+        jsonData = jsonData.map(row => {
+            const normalizedRow = {};
+            for (const [key, value] of Object.entries(row)) {
+                normalizedRow[normalizeColumnName(key)] = value;
+            }
+            return normalizedRow;
+        });
+        
         const columns = Object.keys(jsonData[0]);
         
-        // showProgress('Filtering by patients with at least one INDIK = 8...');
-        // const { data: indikFiltered } = filterByIndik(jsonData, columns);
-        // showProgress(`Filtered to ${indikFiltered.length} rows (patients with INDIK = 8)`);
+        // Validate critical columns exist
+        const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
+        const dateCol = findColumnCaseInsensitive(columns, 'datum');
+        const vmaxCol = findColumnCaseInsensitive(columns, 'vmax (m/s)');
+        
+        const missingCritical = [];
+        if (!pnrCol) missingCritical.push('PNR');
+        if (!dateCol) missingCritical.push('DATUM');
+        if (!vmaxCol) missingCritical.push('Vmax (m/s)');
+        
+        if (missingCritical.length > 0) {
+            throw new Error(`Critical columns missing: ${missingCritical.join(', ')}. Found these columns: ${columns.slice(0, 10).join(', ')}...`);
+        }
         
         showProgress(`Filtering by Vmax (m/s) > ${VMAX_THRESHOLD}...`);
         const vmaxFiltered = filterByVmax(jsonData, columns);
@@ -447,20 +492,20 @@ async function processFile() {
         showProgress(`Modified ${modifiedCount} values`);
         
         const finalData = removeColumns(updatedData, columnsToDrop);
+        const finalColumns = Object.keys(finalData[0]);
         
         showProgress('Generating CSV file...');
         downloadCSV(finalData, file.name);
         
         hideProgress();
         showStatus(
-            `✓ Success! Processed ${finalData.length} rows, removed ${columnsToDrop.length} columns. File downloaded.`,
+            `✓ Success! Processed ${finalData.length} rows, ${finalColumns.length} columns in output. File downloaded.`,
             'success'
         );
         
     } catch (error) {
         hideProgress();
         showStatus(`✗ Error: ${error.message}`, 'error');
-        console.error(error);
     } finally {
         processBtn.disabled = false;
     }
