@@ -454,7 +454,27 @@ async function processFile() {
             return normalizedRow;
         });
         
-        const columns = Object.keys(jsonData[0]);
+        // FIX: Read columns from the sheet header row directly, not from first data row.
+        // sheet_to_json omits keys for empty cells, so Object.keys(jsonData[0]) can miss
+        // columns that happen to be empty in the first row but have data in later rows.
+        const range = XLSX.utils.decode_range(firstSheet['!ref']);
+        const sheetColumns = [];
+        for (let c = range.s.c; c <= range.e.c; c++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: range.s.r, c });
+            const cell = firstSheet[cellAddress];
+            if (cell) {
+                const normalized = normalizeColumnName(String(cell.v || cell.w || ''));
+                if (normalized) sheetColumns.push(normalized);
+            }
+        }
+        
+        // Use sheet header columns as the authoritative column list,
+        // falling back to union of all row keys if sheet header reading fails
+        const columns = sheetColumns.length > 0
+            ? sheetColumns
+            : [...new Set(jsonData.flatMap(row => Object.keys(row)))];
+        
+        console.log('Columns detected from sheet header:', JSON.stringify(columns));
         
         // Validate critical columns exist
         const pnrCol = findColumnCaseInsensitive(columns, 'pnr');
@@ -498,10 +518,28 @@ async function processFile() {
         downloadCSV(finalData, file.name);
         
         hideProgress();
-        showStatus(
-            `✓ Success! Processed ${finalData.length} rows, ${finalColumns.length} columns in output. File downloaded.`,
-            'success'
-        );
+        
+        // Build diagnostic summary visible in the UI
+        const diagLines = [];
+        diagLines.push(`Columns read from file (${columns.length}): ${columns.join(', ')}`);
+        diagLines.push(`Columns removed (${columnsToDrop.length}): ${columnsToDrop.join(', ')}`);
+        diagLines.push(`Columns in output (${finalColumns.length}): ${finalColumns.join(', ')}`);
+        diagLines.push(`Rows before filtering: ${jsonData.length}`);
+        diagLines.push(`Rows after Vmax filter: ${vmaxFiltered.length}`);
+        diagLines.push(`Rows after frequency filter: ${frequencyFiltered.length} (${patientCount} patients)`);
+        
+        const diagHTML = `
+            <div style="margin-top:12px; text-align:left;">
+                ✓ Success! Processed ${finalData.length} rows, ${finalColumns.length} columns in output. File downloaded.
+                <br><br>
+                <details>
+                    <summary style="cursor:pointer; font-weight:bold;">Diagnostic Details (click to expand)</summary>
+                    <pre style="white-space:pre-wrap; word-break:break-all; font-size:12px; margin-top:8px; padding:8px; background:#f5f5f5; border-radius:4px; max-height:300px; overflow-y:auto;">${diagLines.join('\n\n')}</pre>
+                </details>
+            </div>`;
+        
+        status.innerHTML = diagHTML;
+        status.className = 'status show success';
         
     } catch (error) {
         hideProgress();

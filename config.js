@@ -11,7 +11,7 @@ const FEATURE_MAP = {
     "VIKT": 2.0,
     "BMA/LÄK": "rm",
     "BMA_eko": "rm",
-    "INDIK": "indik",
+    "INDIK": "keep", // INDIK? How does this work?
     "BTS": 2.0,
     "BTD": 2.0,
     "PULS": 2.0,
